@@ -611,6 +611,9 @@ int main(int argc, char * const argv[]){
 						}
 						scoreBoard.currentSet++;
 					break;
+					case 'r':
+						scoreBoardInit(&scoreBoard, locaux, visiteurs);
+					break;
 				}
 
 			}
