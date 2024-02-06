@@ -322,9 +322,13 @@ static void httpRequestAnswer(HttpRequest *h){
 		char ligne[128];
 		sprintf(ligne, "<TR>"); 
 		sendLine(s, ligne);
-		sprintf(ligne, "<TD bgcolor='#FFFFFF'>%s</TD>", hasServe ? "<IMG src='http://localhost/v200w_32x32.png'>" : "<IMG src=''>");
-		sendLine(s, ligne);
 		sprintf(ligne, "<TD bgcolor='#404040' style='color:white'>%.32s</TD>", ts->name);
+		sendLine(s, ligne);
+		if(hasServe){
+			sprintf(ligne, "<TD bgcolor='#FFFFFF'><IMG src='http://localhost/v200w_32x32.png'></TD>");
+		}else{
+			sprintf(ligne, "<TD bgcolor='#404040'>" "</TD>");
+		}
 		sendLine(s, ligne);
 		sprintf(ligne, "<TD bgcolor='#4040E0' style='color:white'>%d</TD>", ts->setWon);
 		sendLine(s, ligne);
@@ -357,11 +361,12 @@ static void httpRequestAnswer(HttpRequest *h){
 	sendLine(h->socketFd, "<html>");
 	sendLine(h->socketFd, "	<head>");
 	sendLine(h->socketFd, "		<meta http-equiv=\"refresh\" content=\"3\">");
+	sendLine(h->socketFd, "		<meta charset=\"UTF-8\">");
 
 	sendLine(h->socketFd, "<style>");
 	sendLine(h->socketFd, "td {");
 	sendLine(h->socketFd, "font-family: courier-new;");
-	sendLine(h->socketFd, "font-size: 32px;");
+	sendLine(h->socketFd, "font-size: 36px;");
 	sendLine(h->socketFd, "font-weight: bold;");
 	sendLine(h->socketFd, "border: 0px solid black;");
 	sendLine(h->socketFd, "padding: 8px;");
@@ -378,7 +383,7 @@ static void httpRequestAnswer(HttpRequest *h){
 
 	char ligne[128];
 
-	sendLine(h->socketFd, "<TABLE BORDER='5'>");
+	sendLine(h->socketFd, "<TABLE BORDER='0'>");
 	int actualCurrentSet = h->scoreBoard->currentSet;
 	if(actualCurrentSet > 4){
 		actualCurrentSet = 4;
