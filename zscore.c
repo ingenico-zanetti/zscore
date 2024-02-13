@@ -424,7 +424,7 @@ static void httpRequestAnswerBallon(HttpRequest *h){
 
 static void httpRequestAnswer(HttpRequest *h){
 	if((0 == strncmp(BALLON_PNG_STRING, h->firstLine, sizeof(BALLON_PNG_STRING) - 1))  || (0 == strncmp(FAVICON_ICO_STRING, h->firstLine, sizeof(FAVICON_ICO_STRING) - 1))){
-		fprintf(stderr, "ballon.png or favicon.ico requested, sending ballon.png" "\n");
+		// fprintf(stderr, "ballon.png or favicon.ico requested, sending ballon.png" "\n");
 		httpRequestAnswerBallon(h);
 	}else{
 		httpRequestAnswerZscore(h);
@@ -456,7 +456,7 @@ static int httpRequestUpdate(HttpRequest *h, char *buffer, int len, unsigned sho
 					h->state++;
 				}
 				if(HTTP_REQUEST_STATE_WAIT_LF_2 == h->state){
-					fprintf(stderr, "h->firstLine=[%s]" "\n", h->firstLine);
+					// fprintf(stderr, "h->firstLine=[%s]" "\n", h->firstLine);
 					httpRequestAnswer(h);
 					httpRequestReinit(h);
 					returnValue = 1;
