@@ -1,3 +1,3 @@
-zscore: zscore.c
-	$(CC) -o zscore zscore.c
+zscore: zscore.c ballon.c
+	$(CC) -o zscore zscore.c ballon.c
 

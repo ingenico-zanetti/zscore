@@ -17,6 +17,7 @@
 #include <linux/limits.h>
 #include <sys/time.h>
 
+#include "ballon.h"
 
 #define RECEIVE_BUFFER_SIZE (1024)
 
@@ -293,31 +294,43 @@ void scoreBoardAnalyze(ScoreBoard *sb, char *buffer, int n){
 	}
 }
 
+#define HTTP_REQUEST_MAX_FIRST_LINE_LENGTH (4096)
+
 typedef struct {
 	HttpRequestState state;
+	char firstLine[HTTP_REQUEST_MAX_FIRST_LINE_LENGTH];
+	int firstLineLength;
+	int isFirstLine;
 	int socketFd;
 	ScoreBoard *scoreBoard;
 } HttpRequest;
 
-static void httpRequestInit(HttpRequest *h, int fd, ScoreBoard *s){
+static void httpRequestReinit(HttpRequest *h){
 	h->state = HTTP_REQUEST_STATE_WAIT_CR_1;
+	memset(h->firstLine, 0, sizeof(h->firstLine));
+	h->firstLineLength = 0;
+	h->isFirstLine = 1;
+}
+
+static void httpRequestInit(HttpRequest *h, int fd, ScoreBoard *s){
+	httpRequestReinit(h);
 	h->socketFd = fd;
 	h->scoreBoard = s;
 }
 
-static void httpRequestAnswer(HttpRequest *h){
-	int sendLine(int socketFd, const char *ligne){
-		const char *crlf = "\r\n";
-		int len = strlen(ligne);
-		int total = 0;
-		if(len > 0){
-			total += send(socketFd, ligne, len, 0);
-		}
-		// fprintf(stdout, "%s" "\n", ligne);
-		total += send(socketFd, crlf, strlen(crlf), 0);
-		return total;
+int sendLine(int socketFd, const char *ligne){
+	const char *crlf = "\r\n";
+	int len = strlen(ligne);
+	int total = 0;
+	if(len > 0){
+		total += send(socketFd, ligne, len, 0);
 	}
+	// fprintf(stdout, "%s" "\n", ligne);
+	total += send(socketFd, crlf, strlen(crlf), 0);
+	return total;
+}
 
+static void httpRequestAnswerZscore(HttpRequest *h){
 	void tableRow(int s, int hasServe, TeamScore *ts, int currentSet){
 		char ligne[128];
 		sprintf(ligne, "<TR>"); 
@@ -325,7 +338,7 @@ static void httpRequestAnswer(HttpRequest *h){
 		sprintf(ligne, "<TD bgcolor='#404040' style='color:white'>%.32s</TD>", ts->name);
 		sendLine(s, ligne);
 		if(hasServe){
-			sprintf(ligne, "<TD bgcolor='#FFFFFF'><IMG src='http://localhost/v200w_32x32.png'></TD>");
+			sprintf(ligne, "<TD bgcolor='#FFFFFF'><IMG src='ballon.png'></TD>");
 		}else{
 			sprintf(ligne, "<TD bgcolor='#404040'>" "</TD>");
 		}
@@ -380,9 +393,6 @@ static void httpRequestAnswer(HttpRequest *h){
 	sendLine(h->socketFd, "	</head>");
 	sendLine(h->socketFd, "	<body>");
 
-
-	char ligne[128];
-
 	sendLine(h->socketFd, "<TABLE BORDER='0'>");
 	int actualCurrentSet = h->scoreBoard->currentSet;
 	if(actualCurrentSet > 4){
@@ -397,7 +407,31 @@ static void httpRequestAnswer(HttpRequest *h){
 
 }
 
-static int httpRequestUpdate(HttpRequest *h, char *buffer, int len){
+static void httpRequestAnswerBallon(HttpRequest *h){
+	char ligne[128];
+	sendLine(h->socketFd, "HTTP/1.0 200 OK");
+	sendLine(h->socketFd, "Content-Type: image/png");
+	sendLine(h->socketFd, "Accept-Ranges: bytes");
+	sprintf(ligne, "Content-Length: %d", ballon_png_data_len);
+	sendLine(h->socketFd, ligne);
+	sendLine(h->socketFd, "");
+
+	send(h->socketFd, ballon_png_data, ballon_png_data_len, 0);
+}
+
+#define BALLON_PNG_STRING "GET /ballon.png"
+#define FAVICON_ICO_STRING "GET /favicon.ico"
+
+static void httpRequestAnswer(HttpRequest *h){
+	if((0 == strncmp(BALLON_PNG_STRING, h->firstLine, sizeof(BALLON_PNG_STRING) - 1))  || (0 == strncmp(FAVICON_ICO_STRING, h->firstLine, sizeof(FAVICON_ICO_STRING) - 1))){
+		fprintf(stderr, "ballon.png or favicon.ico requested, sending ballon.png" "\n");
+		httpRequestAnswerBallon(h);
+	}else{
+		httpRequestAnswerZscore(h);
+	}
+}
+
+static int httpRequestUpdate(HttpRequest *h, char *buffer, int len, unsigned short httpPort){
 	int returnValue = 0;
 	char *p = buffer;
 	int i = len;
@@ -405,6 +439,7 @@ static int httpRequestUpdate(HttpRequest *h, char *buffer, int len){
 		char c = *p++;
 		switch(c){
 			case '\r':
+				h->isFirstLine = 0;
 				switch(h->state){
 					case HTTP_REQUEST_STATE_WAIT_CR_1:
 					case HTTP_REQUEST_STATE_WAIT_CR_2:
@@ -416,16 +451,23 @@ static int httpRequestUpdate(HttpRequest *h, char *buffer, int len){
 				}
 				break;
 			case '\n':
+				h->isFirstLine = 0;
 				if(HTTP_REQUEST_STATE_WAIT_LF_1 == h->state){
 					h->state++;
 				}
 				if(HTTP_REQUEST_STATE_WAIT_LF_2 == h->state){
-					h->state = HTTP_REQUEST_STATE_WAIT_CR_1;
+					fprintf(stderr, "h->firstLine=[%s]" "\n", h->firstLine);
 					httpRequestAnswer(h);
+					httpRequestReinit(h);
 					returnValue = 1;
 				}
 				break;
 			default:
+				if(h->isFirstLine){
+					if(h->firstLineLength < (HTTP_REQUEST_MAX_FIRST_LINE_LENGTH - 1)){
+						h->firstLine[h->firstLineLength++] = c;
+					}
+				}
 				h->state = HTTP_REQUEST_STATE_WAIT_CR_1;
 			break;
 		}
@@ -576,7 +618,7 @@ int main(int argc, char * const argv[]){
 			if((-1 != httpTrafficSocket) && FD_ISSET(httpTrafficSocket, &fds)){
 				int lus = recv(httpTrafficSocket, recvBuffer, sizeof(recvBuffer), MSG_DONTWAIT);
 				// fprintf(stderr, "Traffic coming on httpTrafficSocket, %d byte(s) received" "\n", lus);
-				if((lus <= 0) || (httpRequestUpdate(&httpRequest, recvBuffer, lus) > 0)){
+				if((lus <= 0) || (httpRequestUpdate(&httpRequest, recvBuffer, lus, httpPort) > 0)){
 					close(httpTrafficSocket);
 					httpTrafficSocket = -1;
 					httpListenSocket =  listenSocket(&httpAddress,  httpPort);
