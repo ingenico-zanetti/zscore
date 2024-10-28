@@ -151,6 +151,13 @@ static int nibblesToValue(unsigned char nibbles){
 
        // fprintf(stdout, "st[%c %c%c%c:%c%c%c %c] [%c] sc[%c%c %c%c] 1[%c%c:%c%c] 2[%c%c:%c%c] TO[%c %c]", left_set_digit, (left_to_mask & 0x03) ? 'T' : ' ', timer[0], timer[1], timer[2], timer[3], (right_to_mask & 0x03) ? 'T' : ' ',right_set_digit, set_digit, left_score_digit_1, left_score_digit_0, right_score_digit_1, right_score_digit_0, set1[3], set1[2], set1[1], set1[0], set2[3], set2[2], set2[1], set2[0], left_to_digit, right_to_digit);
 
+/*
+ * Examples of expected lines:
+ * 1729986413.166673  : F2 95|55 55 55 55|55 55 55 55|55 55 F1 A5|56 55 55 55|55 95 56 55|65 55 55 55|56 55 55 56|55 55 66 55|55 55 55 55|55 55 55 65|59 55 AA 55|AA AA AA 55|55 55 AA 55|55 AA 55 AA|AA AA AA AA|AA AA AA 6A|59 A6 99 8F|: st[0 T 0:24  0] [0] sc[00 00] 1[  :  ] 2[  :  ] TO[5 0]
+ * 1729986415.021254  : E5 95|55 55 55 55|55 55 55 55|55 55 F1 A5|56 55 55 55|55 95 56 55|65 55 55 56|55 55 55 56|55 56 66 55|55 55 55 55|55 55 55 55|5A 55 AA 55|AA AA AA 55|55 55 AA 55|55 AA 55 AA|AA AA AA AA|AA AA AA 96|9A AA 65 8F|: st[0   0:30T 0] [0] sc[00 00] 1[  :  ] 2[  :  ] TO[5 1]
+ * 1729986414.821369  : E5 95|55 55 55 55|55 55 55 55|55 55 F1 A5|56 55 55 55|55 95 56 95|65 55 55 55|55 55 55 56|55 55 66 55|55 55 55 55|55 55 55 55|AA 55 AA 55|AA AA AA 55|55 55 AA 55|55 AA 55 AA|AA AA AA AA|AA AA AA AA|66 96 A9 8F|: st[0   0: 0  0] [0] sc[00 00] 1[  :  ] 2[  :  ] TO[5 0]
+ */
+
 void scoreBoardDecode(ScoreBoard *sb){
 	// look for '.', then ":"
 	if((sb->index > (70 * 3 + 21)) && ('.' == sb->data[10]) && (':' == sb->data[19])){
@@ -218,10 +225,10 @@ void scoreBoardDecode(ScoreBoard *sb){
 				for(int i = 0 ; i < 4 ; i++){
 					timer[i] = nibblesToValue(binaries[44 - i]);
 				}
-				int left_to_mask = nibblesToValue(binaries[26]); //  bit 0 is first TO, bit 1 second TO (used during TO countdown, probably a blink mask)
-				int right_to_mask = nibblesToValue(binaries[25]); // bit 0 is first TO, bit 1 second TO (used during TO countdown, probably a blink mask)
 
 #endif
+				int left_to_mask = nibblesToValue(binaries[26]); //  bit 0 is first TO, bit 1 second TO (used during TO countdown, probably a blink mask)
+				int right_to_mask = nibblesToValue(binaries[25]); // bit 0 is first TO, bit 1 second TO (used during TO countdown, probably a blink mask)
 
 				int checkScore(int values[4], int *local, int *visitor){
 					for(int i = 0 ; i < 4 ; i++){
@@ -248,6 +255,18 @@ void scoreBoardDecode(ScoreBoard *sb){
 					}
 					if(visitorTimeoutValue & 4){
 						sb->serve = SCORE_VISITOR;
+					}
+					if(0x03 & left_to_mask){
+						sb->local.timeout_running = 1;
+						fprintf(stderr, "local TIMEOUT" "\n");
+					}else{
+						sb->local.timeout_running = 0;
+					}
+					if(0x03 & right_to_mask){
+						sb->visitor.timeout_running = 1;
+						fprintf(stderr, "local TIMEOUT" "\n");
+					}else{
+						sb->visitor.timeout_running = 0;
 					}
 					// In case we missed some point in the 2 first sets,
 					// we can get them from set1Value and set2Value
@@ -348,6 +367,9 @@ static void httpRequestAnswerZscore(HttpRequest *h){
 		for(int i = 0 ; i <= currentSet ; i++){
 			sprintf(ligne, "<TD bgcolor='#404040' style='color:%s'>%02d</TD>", (i == currentSet) ? "#FFFFFF" : "#C0C0C0", ts->setScores[i]);
 			sendLine(s, ligne);
+		}
+		if(ts->timeout_running){
+			sendLine(s, "<TD bgcolor='#C0C0C0' style='color:#0C0C0C'>TIMEOUT</TD>");
 		}
 		sendLine(s, "</TR>");
 	}
@@ -545,7 +567,7 @@ int main(int argc, char * const argv[]){
 	}
 	fprintf(stderr, "Listen to ScoreBoard connection on %s:%d" "\n", inet_ntoa(scoreAddress), ntohs(scorePort));
 	fprintf(stderr, "Listen to       HTTP connection on %s:%d" "\n", inet_ntoa(httpAddress),  ntohs(httpPort));
-	fprintf(stderr, "Transfert timeout (on scorebaord side):%d" "\n", trafficTimeout);
+	fprintf(stderr, "Transfert timeout (on scoreboard side):%d" "\n", trafficTimeout);
 	fprintf(stderr, "Update delay (from scoreboard to HTTP):%d" "\n", updateDelay);
 	fprintf(stderr, "Locaux=   [%s]" "\n", locaux);
 	fprintf(stderr, "Visiteurs=[%s]" "\n", visiteurs);
