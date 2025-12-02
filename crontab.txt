@@ -1,0 +1,2 @@
+@reboot screen -S ZSCORE -dm bash -c "sleep 10 ; cd /home/azanetti/bin ; ./zscore.bash "
+
