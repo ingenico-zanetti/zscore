@@ -383,7 +383,7 @@ static void httpRequestAnswerZscore(HttpRequest *h){
 		sendLine(s, "</TR>");
 	}
 
-	sendLine(h->socketFd, "HTTP/1.0 200 OK");
+	sendLine(h->socketFd, "HTTP/1.1 200 OK");
 	sendLine(h->socketFd, "Content-Type: text/html");
 	sendLine(h->socketFd, "Accept-Ranges: bytes");
 
@@ -440,9 +440,10 @@ static void httpRequestAnswerZscore(HttpRequest *h){
 
 static void httpRequestAnswerBallon(HttpRequest *h){
 	char ligne[128];
-	sendLine(h->socketFd, "HTTP/1.0 200 OK");
+	sendLine(h->socketFd, "HTTP/1.1 200 OK");
 	sendLine(h->socketFd, "Content-Type: image/png");
 	sendLine(h->socketFd, "Accept-Ranges: bytes");
+	sendLine(h->socketFd, "Cache-Control: public, immutable, max-age=31536000");
 	sprintf(ligne, "Content-Length: %d", ballon_png_data_len);
 	sendLine(h->socketFd, ligne);
 	sendLine(h->socketFd, "");
