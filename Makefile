@@ -9,5 +9,5 @@ zscore2: zscore2.c ballon.c
 	$(CC) -o zscore2 zscore2.c ballon.c
 
 install:zscore zscore2
-	cp -vf zscore ~/bin
+	cp -vf zscore zscore2 ~/bin
 
