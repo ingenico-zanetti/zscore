@@ -272,10 +272,10 @@ void scoreBoardCopyBitmap(ScoreBoard *sb, int x, int y, const pixel_s *bitmap, i
 }
 
 void scoreBoardDrawTeamScore(ScoreBoard *sb, TeamScore *ts, int baseline, const int currentSet){
-	for(int set = 0 ; set < 5 ; set++){
+	for(int set = 0 ; set <= currentSet ; set++){
 		char str[4];
 		bool drawMSB = false;
-		bool drawLSB = false;
+		bool drawLSB = true;
 		if(ts->setScoreDigits[set][0]){
 			drawMSB = true;
 			drawLSB = true;
