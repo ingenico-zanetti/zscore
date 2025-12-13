@@ -7,7 +7,7 @@ FT_PKGS = harfbuzz cairo-ft freetype2
 FT_CFLAGS = `pkg-config --cflags $(FT_PKGS)`
 FT_LDFLAGS = `pkg-config --libs $(FT_PKGS)` -lm
 
-all:zscore zscore2 zscore3 crc xor beagle calculator
+all:zscore zscore2 zscore3 crc xor beagle calculator 2to3
 
 zscore: zscore.c ballon.c
 	$(CC) -o zscore zscore.c ballon.c
@@ -29,6 +29,9 @@ xor: xor.c
 
 crc: crc.c
 	$(CC) -o crc crc.c
+
+2to3: 2to3.c
+	$(CC) -o 2to3 2to3.c
 
 install:zscore zscore2 zscore3 zscore.bash
 	cp -vf zscore zscore2 zscore3 zscore.bash ~/bin

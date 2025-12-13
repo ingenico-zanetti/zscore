@@ -595,7 +595,6 @@ static int check_frame(ScoreBoard *sb){
 			uint16_t crc = crc16_0x8005(binaries, sizeof(binaries) - 3); // don't include CRC and terminating 0xF1
 			const uint16_t expectedCRC = (binaries[55] << 8) | binaries[56];
 			if(expectedCRC == crc){
-				fprintf(stderr, "crc=0x%04X, OK !!!!" "\n", crc);
 				return(1);
 			}else{
 				fprintf(stderr, "crc=0x%04X, expected 0x%04X" "\n", crc, expectedCRC);
