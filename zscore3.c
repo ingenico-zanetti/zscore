@@ -83,8 +83,8 @@ typedef struct {
 #include "v200w_60x60_pixels.h"
 
 static pixel_s black = {0, 0, 0, 0};
-static pixel_s blue = {0, 0, 255, 0};
-static pixel_s yellow = {255, 255, 0, 0};
+// static pixel_s blue = {0, 0, 255, 0};
+// static pixel_s yellow = {255, 255, 0, 0};
 static pixel_s white = {255, 255, 255, 0};
 static pixel_s backgroundColor = {0x40, 0x40, 0x40, 0};
 static pixel_s oldSetColor = {0xC0, 0xC0, 0xC0, 0};
@@ -271,11 +271,11 @@ void scoreBoardCopyBitmap(ScoreBoard *sb, int x, int y, const pixel_s *bitmap, i
 	}
 }
 
-void scoreBoardDrawTeamScore(ScoreBoard *sb, TeamScore *ts, int baseline, const int currentSet){
+void scoreBoardDrawTeamScore(ScoreBoard *sb, TeamScore *ts, int baseline, const int currentSet, bool matchEnded){
 	for(int set = 0 ; set <= currentSet ; set++){
 		char str[4];
 		bool drawMSB = false;
-		bool drawLSB = true;
+		bool drawLSB = !matchEnded;
 		if(ts->setScoreDigits[set][0]){
 			drawMSB = true;
 			drawLSB = true;
@@ -318,8 +318,9 @@ void scoreBoardDraw(ScoreBoard *sb){
 			scoreBoardFillRectangle(sb, x, y, x + 59, y + 59, &backgroundColor);
 		}
 	}
-	scoreBoardDrawTeamScore(sb, &sb->local, 45, sb->currentSet);
-	scoreBoardDrawTeamScore(sb, &sb->visitor, 45 + 64, sb->currentSet);
+	bool matchEnded = (3 == sb->local.setWon) || (3 == sb->visitor.setWon); 
+	scoreBoardDrawTeamScore(sb, &sb->local, 45, sb->currentSet, matchEnded);
+	scoreBoardDrawTeamScore(sb, &sb->visitor, 45 + 64, sb->currentSet, matchEnded);
 
 	// What about timeouts ?
 	int left_timeout = sb->local.timeouts & 3;
