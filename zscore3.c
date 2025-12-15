@@ -98,6 +98,7 @@ typedef struct {
 	int index;
 	int timers[4];
 	// GFX stuff
+	struct timeval lastPush;
 	// A pixel buffer to pass on to the JPEG encoder
 	pixel_s bitmap[SCOREBOARD_BITMAP_WIDTH * SCOREBOARD_BITMAP_HEIGHT];
 	// Harfbuzz and Cairo stuff
@@ -117,9 +118,17 @@ static void jpegWriteFunction(void *context, void *data, int len){
 void scoreBoardInitBitmap(ScoreBoard *sb);
 
 static void scoreBoardJpegOutput(ScoreBoard *sb, FILE *out){
-	// fprintf(stderr, "%s()" "\n", __func__);
-	stbi_write_jpg_to_func(jpegWriteFunction, out, SCOREBOARD_BITMAP_WIDTH, SCOREBOARD_BITMAP_HEIGHT, 4, sb->bitmap, 100);
-	fflush(out);
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	struct timeval delta;
+	timersub(&now, &sb->lastPush, &delta);
+	// fprintf(stderr, "%s():delta=%" __PRI64_PREFIX "d.%06" __PRI64_PREFIX "d" "\n", __func__, delta.tv_sec, delta.tv_usec);
+	if((delta.tv_sec > 0) || (delta.tv_usec > 250000)){
+		stbi_write_jpg_to_func(jpegWriteFunction, out, SCOREBOARD_BITMAP_WIDTH, SCOREBOARD_BITMAP_HEIGHT, 4, sb->bitmap, 100);
+		fflush(out);
+		sb->lastPush = now;
+		// fprintf(stderr, "PUSH" "\n");
+	}
 }
 
 void scoreBoardDrawVLine(ScoreBoard *sb, int x, int startY, int endY, pixel_s *color){
@@ -369,6 +378,7 @@ static int nibblesToValue(unsigned char nibbles){
 		case 0x69: // case 0x96:
                         return(9);
                 default:
+			fprintf(stderr, "%s(%02X):unknown byte" "\n", __func__, nibbles);
                         return(-1);
         }
 }
@@ -397,7 +407,7 @@ void scoreBoardDecode(ScoreBoard *sb){
 
 #if 0
 	for(int i = 0 ; i < sizeof(binaries) ; i++){
-		// fprintf(stderr, "[%2d]=%02X ", i, binaries[i]);
+		fprintf(stderr, "[%2d]=%02X ", i, binaries[i]);
 	}
 	fputc('\n', stderr);
 #endif
@@ -405,61 +415,73 @@ void scoreBoardDecode(ScoreBoard *sb){
 			// fprintf(stderr, "%s: correct sync and last byte" "\n", __func__);
 			do{
 #define PRINT_INT(X) printf(#X "=%d" "\n", X);
-				int setValue = nibblesToValue(binaries[45 - 12]); // count set(s) already played
+				int setValue = nibblesToValue(binaries[33 /* 45 - 12 */]); // count set(s) already played
 				if(setValue < 0){
 					break;
 				}
 
-				int localScoreLSB = nibblesToValue(binaries[53 - 12]); // LSB
+				int localScoreLSB = nibblesToValue(binaries[41 /* 53 - 12 */]); // LSB
 				if(localScoreLSB < 0){
 					break;
 				}
 
-				int localScoreMSB = nibblesToValue(binaries[54 - 12]); // MSB
+				int localScoreMSB = nibblesToValue(binaries[42 /* 54 - 12 */]); // MSB
 				if(localScoreMSB < 0){
 					break;
 				}
-				int visitorScoreLSB = nibblesToValue(binaries[50 - 12]); // LSB
+				int visitorScoreLSB = nibblesToValue(binaries[38 /* 50 - 12 */]); // LSB
 				if(visitorScoreLSB < 0){
 					break;
 				}
-				int visitorScoreMSB = nibblesToValue(binaries[51 - 12]); // MSB
+				int visitorScoreMSB = nibblesToValue(binaries[39 /* 51 - 12 */]); // MSB
 				if(visitorScoreMSB < 0){
 					break;
 				}
 
-				int localTimeoutValue = nibblesToValue(binaries[32 - 12]); //  bit 0 is first TO, bit 1 second TO and bit 2 is serve
+				int localTimeoutValue = nibblesToValue(binaries[20 /* 32 - 12 */]); //  bit 0 is first TO, bit 1 second TO and bit 2 is serve
 				if(localTimeoutValue < 0){
 					break;
 				}
-				int visitorTimeoutValue = nibblesToValue(binaries[31 - 12]); // bit 0 is first TO, bit 1 second TO and bit 2 is serve
+				int visitorTimeoutValue = nibblesToValue(binaries[19 /* 31 - 12 */]); // bit 0 is first TO, bit 1 second TO and bit 2 is serve
 				if(visitorTimeoutValue < 0){
 					break;
 				}
 
-				int localSetValue = nibblesToValue(binaries[56 - 12]); // count set(s) won by left
+				int localSetValue = nibblesToValue(binaries[44 /* 56 - 12 */]); // count set(s) won by left
 				if(localSetValue < 0){
 					break;
 				}
-				int visitorSetValue = nibblesToValue(binaries[49 - 12]); // count set(s) won by right
+				int visitorSetValue = nibblesToValue(binaries[37 /* 49 - 12 */]); // count set(s) won by right
 				if(visitorSetValue < 0){
 					break;
 				}
 
-				int set1Values[4];
-				for(int i = 0 ; i < 4 ; i++){
-					set1Values[i] = nibblesToValue(binaries[61 + i - 12]);
+				int set1Values[4] = {-1};
+				int set2Values[4] = {-1};
+				int set3Values[4] = {-1};
+				int set4Values[4] = {-1};
+				if((0xA9 == binaries[7]) && (0x6A == binaries[8])){
+					for(int i = 0 ; i < 4 ; i++){
+						set1Values[i] = nibblesToValue(binaries[49 + i /* 61 + i - 12 */]);
+					}
+					for(int i = 0 ; i < 4 ; i++){
+						set2Values[i] = nibblesToValue(binaries[45 + i /* 57 + i - 12 */]);
+					}
 				}
-				int set2Values[4];
-				for(int i = 0 ; i < 4 ; i++){
-					set2Values[i] = nibblesToValue(binaries[57 + i - 12]);
+				if((0xA6 == binaries[7]) && (0x5A == binaries[8])){
+					for(int i = 0 ; i < 4 ; i++){
+						set3Values[i] = nibblesToValue(binaries[49 + i /* 61 + i - 12 */]);
+					}
+					for(int i = 0 ; i < 4 ; i++){
+						set4Values[i] = nibblesToValue(binaries[45 + i /* 57 + i - 12 */]);
+					}
 				}
 				for(int i = 0 ; i < 4 ; i++){
-					sb->timers[i] = nibblesToValue(binaries[44 - i - 12]);
+					sb->timers[i] = nibblesToValue(binaries[32 - i /* 44 - i - 12 */]);
 				}
 
-				int left_to_mask = nibblesToValue(binaries[26 - 12]); //  bit 0 is first TO, bit 1 second TO (used during TO countdown, probably a blink mask)
-				int right_to_mask = nibblesToValue(binaries[25 - 12]); // bit 0 is first TO, bit 1 second TO (used during TO countdown, probably a blink mask)
+				int left_to_mask = nibblesToValue(binaries[14 /* 26 - 12 */]); //  bit 0 is first TO, bit 1 second TO (used during TO countdown, probably a blink mask)
+				int right_to_mask = nibblesToValue(binaries[13 /* 25 - 12 */]); // bit 0 is first TO, bit 1 second TO (used during TO countdown, probably a blink mask)
 
 				int checkScore(int values[4]){
 					for(int i = 0 ; i < 4 ; i++){
@@ -491,20 +513,6 @@ void scoreBoardDecode(ScoreBoard *sb){
 					if(visitorTimeoutValue & 4){
 						sb->serve = SCORE_VISITOR;
 					}
-#if 0
-					if(0x03 & left_to_mask){
-						sb->local.timeout_running = 1;
-						fprintf(stderr, "local TIMEOUT" "\n");
-					}else{
-						sb->local.timeout_running = 0;
-					}
-					if(0x03 & right_to_mask){
-						sb->visitor.timeout_running = 1;
-						fprintf(stderr, "visitor TIMEOUT" "\n");
-					}else{
-						sb->visitor.timeout_running = 0;
-					}
-#endif
 					// In case we missed some point in the 2 first sets,
 					// we can get them from set1Value and set2Value
 					if(setValue > 0){
@@ -523,12 +531,30 @@ void scoreBoardDecode(ScoreBoard *sb){
 							sb->visitor.setScoreDigits[1][1] = set2Values[0];
 						}
 					}
-					// fprintf(stderr, "Score:");
-					for(int i = 0 ; i <= setValue ; i++){
-						// fprintf(stderr, " %1d%1d/%1d%1d", sb->local.setScoreDigits[i][0], sb->local.setScoreDigits[i][1], sb->visitor.setScoreDigits[i][0], sb->visitor.setScoreDigits[i][1]);
+					if(setValue > 2){
+						if(0 == checkScore(set3Values)){
+							sb->local.setScoreDigits[2][0] = set3Values[3];
+							sb->local.setScoreDigits[2][1] = set3Values[2];
+							sb->visitor.setScoreDigits[2][0] = set3Values[1];
+							sb->visitor.setScoreDigits[2][1] = set3Values[0];
+						}
 					}
-					// fprintf(stderr, "\n");
-					// fprintf(stderr, "TO/TOM %x/%x [%d %d : %d %d] %x/%x TOM/TO" "\n", localTimeoutValue, left_to_mask, sb->timers[0], sb->timers[1], sb->timers[2], sb->timers[3], right_to_mask, visitorTimeoutValue);
+					if(setValue > 3){
+						if(0 == checkScore(set4Values)){
+							sb->local.setScoreDigits[3][0] = set4Values[3];
+							sb->local.setScoreDigits[3][1] = set4Values[2];
+							sb->visitor.setScoreDigits[3][0] = set4Values[1];
+							sb->visitor.setScoreDigits[3][1] = set4Values[0];
+						}
+					}
+#if 0
+					fprintf(stderr, "Score:");
+					for(int i = 0 ; i <= setValue ; i++){
+						fprintf(stderr, " %1d%1d/%1d%1d", sb->local.setScoreDigits[i][0], sb->local.setScoreDigits[i][1], sb->visitor.setScoreDigits[i][0], sb->visitor.setScoreDigits[i][1]);
+					}
+					fprintf(stderr, "\n");
+					fprintf(stderr, "TO/TOM %x/%x [%d %d : %d %d] %x/%x TOM/TO" "\n", localTimeoutValue, left_to_mask, sb->timers[0], sb->timers[1], sb->timers[2], sb->timers[3], right_to_mask, visitorTimeoutValue);
+#endif
 				}else{
 #if 1
 					for(int i = 0 ; i < sizeof(binaries) ; i++){
